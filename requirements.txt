@@ -1,0 +1,7 @@
+openai>=1.0
+pandas
+requests
+python-dotenv
+joblib
+fastapi
+uvicorn[standard]
