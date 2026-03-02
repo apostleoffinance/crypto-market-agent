@@ -45,13 +45,13 @@ def _filter_columns(data: list[dict], columns: list = None) -> list[dict]:
 
 
 def _export_to_csv(data: list[dict], filename_prefix: str) -> str:
-    """Save data as CSV and return the file path."""
+    """Save data as CSV and return the filename (not full path)."""
     df = pd.DataFrame(data)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{filename_prefix}_{timestamp}.csv"
     filepath = EXPORT_DIR / filename
     df.to_csv(filepath, index=False)
-    return str(filepath)
+    return filename
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -223,9 +223,10 @@ def get_top_coins_quarterly(
     response = {"data": records, "total_rows": len(records)}
 
     if export_csv:
-        csv_path = _export_to_csv(records, "top_coins_quarterly")
-        response["csv_file"] = csv_path
-        response["message"] = f"CSV saved to: {csv_path}"
+        csv_filename = _export_to_csv(records, "top_coins_quarterly")
+        response["csv_file"] = csv_filename
+        response["download_url"] = f"/api/exports/{csv_filename}"
+        response["message"] = f"CSV ready for download: [Download CSV](/api/exports/{csv_filename})"
 
     return json.dumps(response, default=str)
 
@@ -248,9 +249,10 @@ def get_coin_price_at_date(
     response = {"data": records}
 
     if export_csv:
-        csv_path = _export_to_csv(records, f"{coin_id}_{date}")
-        response["csv_file"] = csv_path
-        response["message"] = f"CSV saved to: {csv_path}"
+        csv_filename = _export_to_csv(records, f"{coin_id}_{date}")
+        response["csv_file"] = csv_filename
+        response["download_url"] = f"/api/exports/{csv_filename}"
+        response["message"] = f"CSV ready for download: [Download CSV](/api/exports/{csv_filename})"
 
     return json.dumps(response, default=str)
 

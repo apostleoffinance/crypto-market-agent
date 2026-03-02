@@ -309,3 +309,28 @@ def reset_chat(session_id: Optional[str] = Query(None)):
         _chat_sessions[session_id].reset()
         return {"status": "reset", "session_id": session_id}
     return {"status": "no session found"}
+
+
+# ── CSV file downloads ────────────────────────────────────────────────
+
+@app.get("/api/exports/{filename}")
+def download_export(filename: str):
+    """Serve a CSV file from the exports directory."""
+    from pathlib import Path
+    import re
+
+    # Sanitise filename to prevent path traversal
+    if not re.match(r'^[\w\-]+\.csv$', filename):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    exports_dir = Path(__file__).resolve().parents[2] / "exports"
+    filepath = exports_dir / filename
+
+    if not filepath.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return StreamingResponse(
+        open(filepath, "r"),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )

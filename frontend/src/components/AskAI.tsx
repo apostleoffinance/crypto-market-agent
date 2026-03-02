@@ -1,10 +1,59 @@
 import { useState, useRef, useEffect } from 'react';
 import { askAI, resetChat } from '../api/marketDataApi';
-import { MessageSquare, X, Send, RotateCcw } from 'lucide-react';
+import { MessageSquare, X, Send, RotateCcw, Download } from 'lucide-react';
+
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+}
+
+/** Renders message text with download links converted to clickable buttons */
+function MessageContent({ content }: { content: string }) {
+  // Match markdown-style links: [Download CSV](/api/exports/filename.csv)
+  const linkRegex = /\[([^\]]+)\]\((\/api\/exports\/[^\s)]+)\)/g;
+  const parts: (string | { label: string; url: string })[] = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = linkRegex.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(content.slice(lastIndex, match.index));
+    }
+    parts.push({ label: match[1], url: match[2] });
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < content.length) {
+    parts.push(content.slice(lastIndex));
+  }
+
+  // If no links found, just return text
+  if (parts.length === 1 && typeof parts[0] === 'string') {
+    return <>{content}</>;
+  }
+
+  return (
+    <>
+      {parts.map((part, i) =>
+        typeof part === 'string' ? (
+          <span key={i}>{part}</span>
+        ) : (
+          <a
+            key={i}
+            href={`${API_URL}${part.url}`}
+            download
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-colors no-underline"
+          >
+            <Download size={14} />
+            {part.label}
+          </a>
+        ),
+      )}
+    </>
+  );
 }
 
 export default function AskAI() {
@@ -133,7 +182,7 @@ export default function AskAI() {
                 : 'mr-auto bg-gray-800 text-gray-100 rounded-bl-sm'
             }`}
           >
-            {msg.content}
+            <MessageContent content={msg.content} />
           </div>
         ))}
         {loading && (
