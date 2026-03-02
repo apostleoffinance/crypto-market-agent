@@ -7,6 +7,7 @@ Two tools:
 """
 
 import json
+import os
 import pandas as pd
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,6 +24,9 @@ _client: CoinGeckoClient | None = None
 
 EXPORT_DIR = Path(__file__).resolve().parents[2] / "exports"
 EXPORT_DIR.mkdir(exist_ok=True)
+
+# Base URL for building download links (set in Railway env)
+_BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
 
 ALL_COLUMNS = ["date", "symbol", "name", "price", "market_cap", "volume"]
 
@@ -224,9 +228,10 @@ def get_top_coins_quarterly(
 
     if export_csv:
         csv_filename = _export_to_csv(records, "top_coins_quarterly")
+        download_url = f"{_BASE_URL}/api/exports/{csv_filename}"
         response["csv_file"] = csv_filename
-        response["download_url"] = f"/api/exports/{csv_filename}"
-        response["message"] = f"CSV ready for download: [Download CSV](/api/exports/{csv_filename})"
+        response["download_url"] = download_url
+        response["message"] = f"CSV ready for download: [Download CSV]({download_url})"
 
     return json.dumps(response, default=str)
 
@@ -250,9 +255,10 @@ def get_coin_price_at_date(
 
     if export_csv:
         csv_filename = _export_to_csv(records, f"{coin_id}_{date}")
+        download_url = f"{_BASE_URL}/api/exports/{csv_filename}"
         response["csv_file"] = csv_filename
-        response["download_url"] = f"/api/exports/{csv_filename}"
-        response["message"] = f"CSV ready for download: [Download CSV](/api/exports/{csv_filename})"
+        response["download_url"] = download_url
+        response["message"] = f"CSV ready for download: [Download CSV]({download_url})"
 
     return json.dumps(response, default=str)
 

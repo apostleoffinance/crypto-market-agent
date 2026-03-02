@@ -11,8 +11,8 @@ interface Message {
 
 /** Renders message text with download links converted to clickable buttons */
 function MessageContent({ content }: { content: string }) {
-  // Match markdown-style links: [Download CSV](/api/exports/filename.csv)
-  const linkRegex = /\[([^\]]+)\]\((\/api\/exports\/[^\s)]+)\)/g;
+  // Match markdown-style links containing /api/exports/ (relative or absolute URL)
+  const linkRegex = /\[([^\]]+)\]\(((?:https?:\/\/[^\s)]+)?\/api\/exports\/[^\s)]+)\)/g;
   const parts: (string | { label: string; url: string })[] = [];
   let lastIndex = 0;
   let match;
@@ -41,7 +41,7 @@ function MessageContent({ content }: { content: string }) {
         ) : (
           <a
             key={i}
-            href={`${API_URL}${part.url}`}
+            href={part.url.startsWith('http') ? part.url : `${API_URL}${part.url}`}
             download
             target="_blank"
             rel="noopener noreferrer"

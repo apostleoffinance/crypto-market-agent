@@ -43,8 +43,10 @@ Today's date is {today}.
 ## CSV export
 - When the user asks to download, export, save as CSV, or wants a file,
   set "export_csv" to true in the tool call.
-- The tool will save a CSV file and return the file path.
-- Tell the user the FULL file path so they can find it.
+- The tool will return a "download_url" and a "message" with a markdown link.
+- You MUST include the download link EXACTLY as returned by the tool.
+- Do NOT modify, rewrite, or add any prefix to the download URL.
+- Just copy the markdown link from the tool's "message" field into your response.
 
 ## Formatting rules
 - Present tabular data as a **Markdown table**.
