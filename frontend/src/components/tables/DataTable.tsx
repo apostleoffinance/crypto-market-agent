@@ -1,7 +1,7 @@
 import type { CoinData } from '../../types';
 import { COLUMN_LABELS } from '../../types';
 import { formatPrice, formatFullUSD } from '../../utils/formatters';
-import { Download, ArrowUpDown } from 'lucide-react';
+import { Download, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { useState } from 'react';
 
 interface DataTableProps {
@@ -10,6 +10,8 @@ interface DataTableProps {
   onExport: () => void;
   exporting?: boolean;
 }
+
+const NUMERIC_COLS = new Set(['price', 'market_cap', 'volume', 'rank']);
 
 export default function DataTable({ data, columns, onExport, exporting }: DataTableProps) {
   const [sortCol, setSortCol] = useState<string>('');
@@ -67,12 +69,21 @@ export default function DataTable({ data, columns, onExport, exporting }: DataTa
                 <th
                   key={col}
                   onClick={() => handleSort(col)}
-                  className="px-5 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer hover:text-gray-900 select-none"
+                  className={`px-5 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 hover:text-gray-900 select-none transition-colors ${NUMERIC_COLS.has(col) ? 'text-right' : 'text-left'}`}
                 >
                   <span className="inline-flex items-center gap-1">
                     {COLUMN_LABELS[col] || col}
-                    <ArrowUpDown size={12} className={sortCol === col ? 'text-brand-600' : 'text-gray-300'} />
+                    {sortCol === col ? (
+                      sortAsc ? <ArrowUp size={13} className="text-brand-600" /> : <ArrowDown size={13} className="text-brand-600" />
+                    ) : (
+                      <ArrowUpDown size={12} className="text-gray-300" />
+                    )}
                   </span>
+                  {sortCol === col && (
+                    <span className="ml-1 text-[10px] text-brand-500 font-normal normal-case">
+                      {sortAsc ? '(low → high)' : '(high → low)'}
+                    </span>
+                  )}
                 </th>
               ))}
             </tr>
@@ -81,7 +92,10 @@ export default function DataTable({ data, columns, onExport, exporting }: DataTa
             {sorted.map((row, i) => (
               <tr key={i} className="hover:bg-gray-50 transition-colors">
                 {visibleCols.map((col) => (
-                  <td key={col} className="px-5 py-3 whitespace-nowrap text-gray-700">
+                  <td
+                    key={col}
+                    className={`px-5 py-3 whitespace-nowrap text-gray-700 ${NUMERIC_COLS.has(col) ? 'text-right font-mono' : ''}`}
+                  >
                     {col === 'symbol' ? (
                       <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-brand-50 text-brand-700 text-xs font-semibold">
                         {formatCell(col, (row as any)[col])}
