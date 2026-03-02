@@ -1,6 +1,10 @@
 import type { TopCoinsResponse, SummaryResponse, QuarterDatesResponse } from '../types';
 
-const BASE = '/api';
+// In dev, Vite proxy handles /api → localhost:8000
+// In production (Vercel), VITE_API_URL points to your Railway backend
+const BASE = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api`
+  : '/api';
 
 interface TopCoinsParams {
   topN?: number;

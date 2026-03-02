@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from datetime import datetime, timezone
 from typing import Optional
 import pandas as pd
+import os
 import io
 
 from src.data.coingecko_client import CoinGeckoClient
@@ -28,9 +29,12 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# In production, set ALLOWED_ORIGINS to your Vercel URL(s), comma-separated
+_allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
