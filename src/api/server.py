@@ -213,6 +213,55 @@ def get_coin_at_date(
     return {"data": row}
 
 
+@app.get("/api/coin/{coin_id}/history")
+def get_coin_history(
+    coin_id: str,
+    start_year: int = Query(2020, description="Start year"),
+    end_year: Optional[int] = Query(None, description="End year"),
+    interval: str = Query("quarterly", description="'quarterly', 'monthly', or 'yearly'"),
+    position: str = Query("end", description="'start', 'end', or 'both' (quarterly only)"),
+    columns: Optional[str] = Query(None, description="Comma-separated columns"),
+):
+    """Get a single coin's historical data across multiple dates."""
+    from src.agent.tools import _generate_monthly_dates, _generate_yearly_dates
+
+    client = get_client()
+
+    if interval == "monthly":
+        dates = _generate_monthly_dates(start_year, end_year)
+    elif interval == "yearly":
+        dates = _generate_yearly_dates(start_year, end_year)
+    else:
+        end_date = None
+        if end_year:
+            end_date = datetime(end_year, 12, 31, tzinfo=timezone.utc)
+        dates = generate_quarter_dates(
+            start_year=start_year, end_date=end_date, position=position,
+        )
+
+    if not dates:
+        raise HTTPException(status_code=400, detail="No valid dates for the given parameters.")
+
+    rows = []
+    for dt in dates:
+        row = client.fetch_coin_at_date(coin_id, dt)
+        if row:
+            rows.append(row)
+
+    if not rows:
+        raise HTTPException(status_code=404, detail=f"No data found for {coin_id}")
+
+    col_list = None
+    if columns:
+        col_list = [c.strip() for c in columns.split(",") if c.strip() in ALL_COLUMNS]
+
+    records = rows
+    if col_list:
+        records = [{k: v for k, v in r.items() if k in col_list} for r in rows]
+
+    return {"data": records, "total_rows": len(records), "coin_id": coin_id}
+
+
 @app.get("/api/summary")
 def get_summary():
     """Get summary statistics for the dashboard.

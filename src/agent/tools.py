@@ -136,8 +136,9 @@ TOOL_SCHEMAS = [
         "function": {
             "name": "get_coin_price_at_date",
             "description": (
-                "Get a single coin's data on a specific date. "
-                "Can query any date. Supports column filtering and CSV export."
+                "Get a single coin's data on ONE specific date. "
+                "Use this only when the user asks about a coin on a single date. "
+                "For multiple dates, use get_coin_history instead."
             ),
             "parameters": {
                 "type": "object",
@@ -165,6 +166,68 @@ TOOL_SCHEMAS = [
                     },
                 },
                 "required": ["coin_id", "date"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_coin_history",
+            "description": (
+                "Get a SINGLE coin's historical data across multiple dates. "
+                "Use this when the user asks for one specific coin's price/market cap/volume "
+                "over a time range (e.g. 'BTC price from 2020 to 2022 quarterly', "
+                "'Ethereum monthly data for 2024', 'Solana price every quarter from 2021'). "
+                "Supports quarterly, monthly, or custom date intervals. "
+                "Do NOT use get_top_coins_quarterly for single-coin history."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "coin_id": {
+                        "type": "string",
+                        "description": "CoinGecko coin id, e.g. 'bitcoin', 'ethereum', 'solana'",
+                    },
+                    "start_year": {
+                        "type": "integer",
+                        "description": "Year to start from",
+                    },
+                    "end_year": {
+                        "type": "integer",
+                        "description": "Year to end at (defaults to current year)",
+                    },
+                    "interval": {
+                        "type": "string",
+                        "enum": ["quarterly", "monthly", "yearly"],
+                        "description": "How often to sample data. 'quarterly' = every quarter end, 'monthly' = every month end, 'yearly' = every year end.",
+                        "default": "quarterly",
+                    },
+                    "position": {
+                        "type": "string",
+                        "enum": ["start", "end", "both"],
+                        "description": "For quarterly interval: 'start', 'end', or 'both'. Ignored for monthly/yearly.",
+                        "default": "end",
+                    },
+                    "dates": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional list of specific dates (YYYY-MM-DD). If provided, start_year/end_year/interval are ignored.",
+                    },
+                    "columns": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": ["date", "symbol", "name", "price", "market_cap", "volume"]
+                        },
+                        "description": "Which columns to include. If omitted, all columns are returned.",
+                    },
+                    "export_csv": {
+                        "type": "boolean",
+                        "description": "If true, save result as a downloadable CSV.",
+                        "default": False,
+                    },
+                },
+                "required": ["coin_id"],
             },
         },
     },
@@ -263,6 +326,96 @@ def get_coin_price_at_date(
     return json.dumps(response, default=str)
 
 
+def get_coin_history(
+    coin_id: str,
+    start_year: int = 2020,
+    end_year: int = None,
+    interval: str = "quarterly",
+    position: str = "end",
+    dates: list = None,
+    columns: list = None,
+    export_csv: bool = False,
+) -> str:
+    """Fetch a single coin's data across multiple dates."""
+    client = _get_client()
+
+    if dates:
+        # User-specified custom dates
+        date_objects = [
+            datetime.strptime(d, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            for d in dates
+        ]
+    elif interval == "monthly":
+        date_objects = _generate_monthly_dates(start_year, end_year)
+    elif interval == "yearly":
+        date_objects = _generate_yearly_dates(start_year, end_year)
+    else:
+        # quarterly (default)
+        end_date = None
+        if end_year:
+            end_date = datetime(end_year, 12, 31, tzinfo=timezone.utc)
+        date_objects = generate_quarter_dates(
+            start_year=start_year,
+            end_date=end_date,
+            position=position,
+        )
+
+    if not date_objects:
+        return json.dumps({"error": "No valid dates for the given parameters."})
+
+    print(f"  📊  Fetching {coin_id} across {len(date_objects)} dates…")
+
+    rows = []
+    for dt in date_objects:
+        print(f"  ⏳  {coin_id} on {dt.strftime('%Y-%m-%d')}…")
+        row = client.fetch_coin_at_date(coin_id, dt)
+        if row:
+            rows.append(row)
+
+    if not rows:
+        return json.dumps({"error": f"No data found for {coin_id} in the given date range."})
+
+    records = _filter_columns(rows, columns)
+    response = {"data": records, "total_rows": len(records), "coin_id": coin_id}
+
+    if export_csv:
+        csv_filename = _export_to_csv(records, f"{coin_id}_history")
+        download_url = f"{_BASE_URL}/api/exports/{csv_filename}"
+        response["csv_file"] = csv_filename
+        response["download_url"] = download_url
+        response["message"] = f"CSV ready for download: [Download CSV]({download_url})"
+
+    return json.dumps(response, default=str)
+
+
+def _generate_monthly_dates(start_year: int, end_year: int = None) -> list:
+    """Generate month-end dates."""
+    now = datetime.now(tz=timezone.utc)
+    if end_year is None:
+        end_year = now.year
+    dates = []
+    for year in range(start_year, end_year + 1):
+        for month in range(1, 13):
+            last_day = pd.Timestamp(year=year, month=month, day=1) + pd.offsets.MonthEnd(0)
+            dt = datetime(last_day.year, last_day.month, last_day.day, tzinfo=timezone.utc)
+            if dt <= now:
+                dates.append(dt)
+    return sorted(dates)
+
+
+def _generate_yearly_dates(start_year: int, end_year: int = None) -> list:
+    """Generate year-end dates (Dec 31)."""
+    now = datetime.now(tz=timezone.utc)
+    if end_year is None:
+        end_year = now.year
+    dates = []
+    for year in range(start_year, end_year + 1):
+        dt = datetime(year, 12, 31, tzinfo=timezone.utc)
+        if dt <= now:
+            dates.append(dt)
+    return sorted(dates)
+
+
 # ═══════════════════════════════════════════════════════════════════════
 #  Dispatcher
 # ═══════════════════════════════════════════════════════════════════════
@@ -270,6 +423,7 @@ def get_coin_price_at_date(
 TOOL_MAP = {
     "get_top_coins_quarterly": get_top_coins_quarterly,
     "get_coin_price_at_date": get_coin_price_at_date,
+    "get_coin_history": get_coin_history,
 }
 
 
