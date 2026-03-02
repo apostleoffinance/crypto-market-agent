@@ -30,12 +30,13 @@ app = FastAPI(
 )
 
 # In production, set ALLOWED_ORIGINS to your Vercel URL(s), comma-separated
-_allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "*")
+_allowed_origins = [o.strip().rstrip("/") for o in _raw_origins.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
