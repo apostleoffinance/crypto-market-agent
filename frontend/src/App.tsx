@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import DashboardLayout from './components/layout/DashboardLayout';
 import Dashboard from './pages/Dashboard';
 import HistoricalExplorer from './pages/HistoricalExplorer';
+import AskAI from './components/AskAI';
 
 export default function App() {
   return (
@@ -12,6 +13,7 @@ export default function App() {
           <Route path="/explorer" element={<HistoricalExplorer />} />
         </Route>
       </Routes>
+      <AskAI />
     </BrowserRouter>
   );
 }

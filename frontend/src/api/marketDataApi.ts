@@ -78,3 +78,27 @@ export async function downloadExportCSV(params: TopCoinsParams): Promise<void> {
   a.remove();
   URL.revokeObjectURL(a.href);
 }
+
+// ── AI Chat ──────────────────────────────────────────────────────────
+
+interface ChatResponse {
+  response: string;
+  session_id: string;
+}
+
+export async function askAI(
+  message: string,
+  sessionId?: string,
+): Promise<ChatResponse> {
+  const res = await fetch(`${BASE}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, session_id: sessionId }),
+  });
+  if (!res.ok) throw new Error(`Chat error: ${res.status}`);
+  return res.json();
+}
+
+export async function resetChat(sessionId: string): Promise<void> {
+  await fetch(`${BASE}/chat/reset?session_id=${sessionId}`, { method: 'POST' });
+}

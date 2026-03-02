@@ -259,3 +259,53 @@ def get_summary():
         "top_coin": top_coin,
         "total_data_points": len(df),
     }
+
+
+# ── Chat ──────────────────────────────────────────────────────────────
+
+class ChatRequest(BaseModel):
+    message: str
+    session_id: Optional[str] = None
+
+
+class ChatResponse(BaseModel):
+    response: str
+    session_id: str
+
+
+# Store agent sessions in memory (keyed by session_id)
+_chat_sessions: dict = {}
+
+
+@app.post("/api/chat", response_model=ChatResponse)
+def chat(req: ChatRequest):
+    """Send a natural-language question to the AI agent and get an answer."""
+    from src.agent.agent import CryptoAgent
+    import uuid
+
+    sid = req.session_id or str(uuid.uuid4())
+
+    # Reuse or create agent for this session
+    if sid not in _chat_sessions:
+        try:
+            _chat_sessions[sid] = CryptoAgent()
+        except ValueError as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    agent = _chat_sessions[sid]
+
+    try:
+        answer = agent.chat(req.message)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
+
+    return {"response": answer, "session_id": sid}
+
+
+@app.post("/api/chat/reset")
+def reset_chat(session_id: Optional[str] = Query(None)):
+    """Reset a chat session."""
+    if session_id and session_id in _chat_sessions:
+        _chat_sessions[session_id].reset()
+        return {"status": "reset", "session_id": session_id}
+    return {"status": "no session found"}
