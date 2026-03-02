@@ -310,6 +310,51 @@ def get_summary():
     }
 
 
+# ── Analytics ─────────────────────────────────────────────────────────
+
+def _default_coin_ids(n: int = 20) -> list[str]:
+    """Get the top N coin IDs from the current market data."""
+    client = get_client()
+    coins = client.get_current_top_coins(n_pages=1)
+    return [c["id"] for c in coins[:n]]
+
+
+@app.get("/api/analytics/correlation")
+def get_correlation(
+    days: int = Query(365, ge=30, le=1095, description="Number of days for price history"),
+    top_n: int = Query(15, ge=2, le=30, description="Number of top coins to include"),
+):
+    """Compute a correlation matrix of daily log returns for top coins."""
+    from src.data.analytics import compute_correlation_matrix
+    coin_ids = _default_coin_ids(top_n)
+    result = compute_correlation_matrix(get_client(), coin_ids, days=days)
+    return result
+
+
+@app.get("/api/analytics/risk-metrics")
+def get_risk_metrics(
+    days: int = Query(365, ge=30, le=1095, description="Lookback period in days"),
+    top_n: int = Query(20, ge=1, le=50, description="Number of top coins"),
+    risk_free_rate: float = Query(0.05, description="Annualised risk-free rate"),
+):
+    """Compute Sharpe, Sortino, max drawdown, VaR for top coins."""
+    from src.data.analytics import compute_risk_metrics
+    coin_ids = _default_coin_ids(top_n)
+    metrics = compute_risk_metrics(get_client(), coin_ids, days=days, risk_free_rate=risk_free_rate)
+    return {"data": metrics, "days": days, "risk_free_rate": risk_free_rate}
+
+
+@app.get("/api/analytics/sectors")
+def get_sector_performance(
+    days: int = Query(365, ge=30, le=1095),
+    top_n: int = Query(30, ge=5, le=60),
+):
+    """Compute sector-level aggregate performance metrics."""
+    from src.data.analytics import compute_sector_performance
+    coin_ids = _default_coin_ids(top_n)
+    return compute_sector_performance(get_client(), coin_ids, days=days)
+
+
 # ── Chat ──────────────────────────────────────────────────────────────
 
 class ChatRequest(BaseModel):

@@ -1,9 +1,12 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Search, Database, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, Search, Database, TrendingUp, Grid3X3, ShieldAlert, PieChart } from 'lucide-react';
 
 const links = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/explorer', label: 'Historical Explorer', icon: Search },
+  { to: '/correlation', label: 'Correlation Matrix', icon: Grid3X3 },
+  { to: '/risk', label: 'Risk Metrics', icon: ShieldAlert },
+  { to: '/sectors', label: 'Sector Rotation', icon: PieChart },
 ];
 
 export default function Sidebar() {

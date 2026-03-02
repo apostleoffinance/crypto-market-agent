@@ -79,6 +79,48 @@ export async function downloadExportCSV(params: TopCoinsParams): Promise<void> {
   URL.revokeObjectURL(a.href);
 }
 
+// ── Analytics ────────────────────────────────────────────────────────
+
+import type { CorrelationResponse, RiskMetricsResponse, SectorResponse } from '../types';
+
+export async function fetchCorrelation(params: {
+  days?: number;
+  topN?: number;
+} = {}): Promise<CorrelationResponse> {
+  const sp = new URLSearchParams();
+  if (params.days) sp.set('days', String(params.days));
+  if (params.topN) sp.set('top_n', String(params.topN));
+  const res = await fetch(`${BASE}/analytics/correlation?${sp}`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchRiskMetrics(params: {
+  days?: number;
+  topN?: number;
+  riskFreeRate?: number;
+} = {}): Promise<RiskMetricsResponse> {
+  const sp = new URLSearchParams();
+  if (params.days) sp.set('days', String(params.days));
+  if (params.topN) sp.set('top_n', String(params.topN));
+  if (params.riskFreeRate !== undefined) sp.set('risk_free_rate', String(params.riskFreeRate));
+  const res = await fetch(`${BASE}/analytics/risk-metrics?${sp}`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchSectors(params: {
+  days?: number;
+  topN?: number;
+} = {}): Promise<SectorResponse> {
+  const sp = new URLSearchParams();
+  if (params.days) sp.set('days', String(params.days));
+  if (params.topN) sp.set('top_n', String(params.topN));
+  const res = await fetch(`${BASE}/analytics/sectors?${sp}`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
 // ── AI Chat ──────────────────────────────────────────────────────────
 
 interface ChatResponse {

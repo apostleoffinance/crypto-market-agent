@@ -1,5 +1,6 @@
 openai>=1.0
 pandas
+numpy
 requests
 python-dotenv
 joblib

@@ -29,3 +29,23 @@
     @apply block text-sm font-medium text-gray-700 mb-1;
   }
 }
+
+/* Print-friendly styles for PDF export */
+@media print {
+  aside, .ask-ai-widget, button, nav {
+    display: none !important;
+  }
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .card {
+    box-shadow: none !important;
+    border: 1px solid #e5e7eb !important;
+    break-inside: avoid;
+  }
+  body {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}

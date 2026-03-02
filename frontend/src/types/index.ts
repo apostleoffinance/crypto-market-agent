@@ -50,3 +50,58 @@ export const COLUMN_LABELS: Record<string, string> = {
   market_cap: 'Market Cap (USD)',
   volume: 'Volume (USD)',
 };
+
+// ── Analytics types ──────────────────────────────────────────────────
+
+export interface CorrelationResponse {
+  coins: string[];
+  matrix: number[][];
+  days: number;
+  data_points: number;
+  error?: string;
+}
+
+export interface RiskMetric {
+  coin_id: string;
+  sector: string;
+  current_price: number;
+  annualised_return: number;
+  annualised_volatility: number;
+  sharpe_ratio: number;
+  sortino_ratio: number;
+  max_drawdown: number;
+  var_95: number;
+  var_99: number;
+  data_points: number;
+}
+
+export interface RiskMetricsResponse {
+  data: RiskMetric[];
+  days: number;
+  risk_free_rate: number;
+}
+
+export interface SectorCoin {
+  coin_id: string;
+  current_price: number;
+  pct_7d: number | null;
+  pct_30d: number | null;
+  pct_90d: number | null;
+  pct_ytd: number | null;
+}
+
+export interface Sector {
+  sector: string;
+  coin_count: number;
+  avg_7d: number | null;
+  avg_30d: number | null;
+  avg_90d: number | null;
+  avg_ytd: number | null;
+  coins: SectorCoin[];
+}
+
+export interface SectorResponse {
+  sectors: Sector[];
+  total_coins: number;
+  as_of: string;
+}
