@@ -3,13 +3,15 @@ import { fetchSectors } from '../api/marketDataApi';
 import type { Sector, SectorCoin } from '../types';
 import { ChevronDown, ChevronRight, TrendingUp, TrendingDown } from 'lucide-react';
 
-function pctClass(val: number): string {
+function pctClass(val: number | null): string {
+  if (val === null) return 'text-gray-400';
   if (val > 0) return 'text-green-600';
   if (val < 0) return 'text-red-500';
   return 'text-gray-500';
 }
 
-function PerfBadge({ value }: { value: number }) {
+function PerfBadge({ value }: { value: number | null }) {
+  if (value === null) return <span className="text-gray-400 text-sm">—</span>;
   return (
     <span className={`inline-flex items-center gap-0.5 font-mono text-sm ${pctClass(value)}`}>
       {value > 0 ? <TrendingUp size={14} /> : value < 0 ? <TrendingDown size={14} /> : null}
@@ -29,13 +31,10 @@ function SectorRow({ sector, isOpen, toggle }: { sector: Sector; isOpen: boolean
             <span className="text-xs text-gray-400">({sector.coin_count} coins)</span>
           </div>
         </td>
-        <td className="px-4 py-3 text-right"><PerfBadge value={sector.perf_7d} /></td>
-        <td className="px-4 py-3 text-right"><PerfBadge value={sector.perf_30d} /></td>
-        <td className="px-4 py-3 text-right"><PerfBadge value={sector.perf_90d} /></td>
-        <td className="px-4 py-3 text-right"><PerfBadge value={sector.perf_ytd} /></td>
-        <td className="px-4 py-3 text-right font-mono text-gray-600">
-          ${formatMcap(sector.total_market_cap)}
-        </td>
+        <td className="px-4 py-3 text-right"><PerfBadge value={sector.avg_7d} /></td>
+        <td className="px-4 py-3 text-right"><PerfBadge value={sector.avg_30d} /></td>
+        <td className="px-4 py-3 text-right"><PerfBadge value={sector.avg_90d} /></td>
+        <td className="px-4 py-3 text-right"><PerfBadge value={sector.avg_ytd} /></td>
       </tr>
       {isOpen && sector.coins.map((c) => (
         <CoinRow key={c.coin_id} coin={c} />
@@ -50,30 +49,22 @@ function CoinRow({ coin }: { coin: SectorCoin }) {
       <td className="px-4 py-2 pl-10">
         <span className="text-sm text-gray-700">{coin.coin_id.replace(/-/g, ' ')}</span>
       </td>
-      <td className="px-4 py-2 text-right"><PerfBadge value={coin.perf_7d} /></td>
-      <td className="px-4 py-2 text-right"><PerfBadge value={coin.perf_30d} /></td>
-      <td className="px-4 py-2 text-right"><PerfBadge value={coin.perf_90d} /></td>
-      <td className="px-4 py-2 text-right"><PerfBadge value={coin.perf_ytd} /></td>
-      <td className="px-4 py-2 text-right font-mono text-gray-500 text-xs">
-        ${formatMcap(coin.market_cap)}
-      </td>
+      <td className="px-4 py-2 text-right"><PerfBadge value={coin.pct_7d} /></td>
+      <td className="px-4 py-2 text-right"><PerfBadge value={coin.pct_30d} /></td>
+      <td className="px-4 py-2 text-right"><PerfBadge value={coin.pct_90d} /></td>
+      <td className="px-4 py-2 text-right"><PerfBadge value={coin.pct_ytd} /></td>
     </tr>
   );
 }
 
-function formatMcap(val: number): string {
-  if (val >= 1e12) return (val / 1e12).toFixed(2) + 'T';
-  if (val >= 1e9) return (val / 1e9).toFixed(2) + 'B';
-  if (val >= 1e6) return (val / 1e6).toFixed(2) + 'M';
-  return val.toLocaleString();
-}
+type SortField = 'avg_7d' | 'avg_30d' | 'avg_90d' | 'avg_ytd';
 
 export default function SectorRotation() {
   const [data, setData] = useState<Sector[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [openSectors, setOpenSectors] = useState<Set<string>>(new Set());
-  const [sortKey, setSortKey] = useState<'perf_7d' | 'perf_30d' | 'perf_90d' | 'perf_ytd' | 'total_market_cap'>('perf_30d');
+  const [sortKey, setSortKey] = useState<SortField>('avg_30d');
   const [sortAsc, setSortAsc] = useState(false);
 
   const load = async () => {
@@ -81,7 +72,7 @@ export default function SectorRotation() {
     setError('');
     try {
       const res = await fetchSectors();
-      setData(res.data);
+      setData(res.sectors);
     } catch (err: any) {
       setError(err.message || 'Failed to load sectors');
     } finally {
@@ -102,18 +93,18 @@ export default function SectorRotation() {
     });
   };
 
-  const handleSort = (key: typeof sortKey) => {
+  const handleSort = (key: SortField) => {
     if (sortKey === key) setSortAsc(!sortAsc);
     else { setSortKey(key); setSortAsc(false); }
   };
 
   const sorted = [...data].sort((a, b) => {
-    const av = a[sortKey];
-    const bv = b[sortKey];
+    const av = a[sortKey] ?? -999;
+    const bv = b[sortKey] ?? -999;
     return sortAsc ? av - bv : bv - av;
   });
 
-  const ColHead = ({ label, field }: { label: string; field: typeof sortKey }) => (
+  const ColHead = ({ label, field }: { label: string; field: SortField }) => (
     <th
       className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer hover:text-gray-700"
       onClick={() => handleSort(field)}
@@ -157,8 +148,8 @@ export default function SectorRotation() {
               <div key={s.sector} className="card p-4">
                 <p className="text-xs text-gray-500 font-medium mb-1">{s.sector}</p>
                 <div className="flex items-baseline gap-2">
-                  <PerfBadge value={s.perf_30d} />
-                  <span className="text-xs text-gray-400">30d</span>
+                  <PerfBadge value={s.avg_30d} />
+                  <span className="text-xs text-gray-400">30d avg</span>
                 </div>
               </div>
             ))}
@@ -170,11 +161,10 @@ export default function SectorRotation() {
               <thead className="bg-gray-50 border-b">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sector</th>
-                  <ColHead label="7d" field="perf_7d" />
-                  <ColHead label="30d" field="perf_30d" />
-                  <ColHead label="90d" field="perf_90d" />
-                  <ColHead label="YTD" field="perf_ytd" />
-                  <ColHead label="Market Cap" field="total_market_cap" />
+                  <ColHead label="7d" field="avg_7d" />
+                  <ColHead label="30d" field="avg_30d" />
+                  <ColHead label="90d" field="avg_90d" />
+                  <ColHead label="YTD" field="avg_ytd" />
                 </tr>
               </thead>
               <tbody>
