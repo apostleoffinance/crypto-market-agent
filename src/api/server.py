@@ -157,7 +157,18 @@ def get_top_coins(
     if col_list:
         available = [c for c in col_list if c in available]
 
-    records = df[available].sort_values("date" if "date" in available else available[0]).to_dict(orient="records")
+    sort_cols = []
+    sort_asc = []
+    if "date" in available:
+        sort_cols.append("date")
+        sort_asc.append(True)
+    if "market_cap" in df.columns:
+        sort_cols.append("market_cap")
+        sort_asc.append(False)
+    if sort_cols:
+        records = df[available].sort_values(sort_cols, ascending=sort_asc).to_dict(orient="records")
+    else:
+        records = df[available].to_dict(orient="records")
 
     return {"data": records, "total_rows": len(records), "dates_queried": len(dates)}
 

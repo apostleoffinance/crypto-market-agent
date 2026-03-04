@@ -28,15 +28,60 @@ export default function DataTable({ data, columns, onExport, exporting }: DataTa
     }
   };
 
-  const sorted = [...data].sort((a, b) => {
-    if (!sortCol) return 0;
-    const aVal = (a as any)[sortCol];
-    const bVal = (b as any)[sortCol];
-    if (aVal == null) return 1;
-    if (bVal == null) return -1;
-    const cmp = typeof aVal === 'number' ? aVal - bVal : String(aVal).localeCompare(String(bVal));
-    return sortAsc ? cmp : -cmp;
-  });
+  const sorted = (() => {
+    const rows = [...data];
+    if (!sortCol) return rows;
+
+    // For numeric columns, sort within each date group to preserve chronological order
+    if (NUMERIC_COLS.has(sortCol)) {
+      // Group rows by date
+      const grouped: Record<string, typeof data> = {};
+      const dateOrder: string[] = [];
+      rows.forEach((row) => {
+        const key = (row as any).date ?? '';
+        if (!grouped[key]) {
+          grouped[key] = [];
+          dateOrder.push(key);
+        }
+        grouped[key].push(row);
+      });
+
+      // Keep dates in chronological order
+      dateOrder.sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+      // Sort within each date group by the selected numeric column
+      const result: typeof data = [];
+      dateOrder.forEach((date) => {
+        grouped[date].sort((a, b) => {
+          const aVal = (a as any)[sortCol] ?? 0;
+          const bVal = (b as any)[sortCol] ?? 0;
+          return sortAsc ? aVal - bVal : bVal - aVal;
+        });
+        result.push(...grouped[date]);
+      });
+      return result;
+    }
+
+    // For date column, sort chronologically
+    if (sortCol === 'date') {
+      rows.sort((a, b) => {
+        const cmp = new Date((a as any).date).getTime() - new Date((b as any).date).getTime();
+        return sortAsc ? cmp : -cmp;
+      });
+      return rows;
+    }
+
+    // For other columns (symbol, name), sort globally as text
+    rows.sort((a, b) => {
+      const aVal = (a as any)[sortCol];
+      const bVal = (b as any)[sortCol];
+      if (aVal == null) return 1;
+      if (bVal == null) return -1;
+      const cmp = String(aVal).localeCompare(String(bVal));
+      return sortAsc ? cmp : -cmp;
+    });
+    return rows;
+  })();
 
   const formatCell = (col: string, val: any): string => {
     if (val == null) return '—';
