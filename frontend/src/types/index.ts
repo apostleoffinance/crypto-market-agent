@@ -31,6 +31,19 @@ export interface SummaryResponse {
   total_data_points: number;
 }
 
+export const SECTORS = [
+  'Layer 1',
+  'Layer 2',
+  'DeFi',
+  'Exchange',
+  'Meme',
+  'AI',
+  'Payments',
+  'RWA',
+  'Infrastructure',
+  'Other',
+] as const;
+
 export interface FilterState {
   topN: number;
   startYear: number;
@@ -38,6 +51,7 @@ export interface FilterState {
   position: 'start' | 'end' | 'both';
   columns: string[];
   quarters: string;
+  excludeSectors: string[];
 }
 
 export const ALL_COLUMNS = ['date', 'symbol', 'name', 'price', 'market_cap', 'volume'] as const;

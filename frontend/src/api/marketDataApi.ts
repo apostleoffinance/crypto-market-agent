@@ -13,6 +13,7 @@ interface TopCoinsParams {
   position?: string;
   quarters?: string;
   columns?: string[];
+  excludeSectors?: string[];
 }
 
 function buildTopCoinsSearch(params: TopCoinsParams): URLSearchParams {
@@ -23,6 +24,7 @@ function buildTopCoinsSearch(params: TopCoinsParams): URLSearchParams {
   if (params.position) sp.set('position', params.position);
   if (params.quarters) sp.set('quarters', params.quarters);
   if (params.columns && params.columns.length > 0) sp.set('columns', params.columns.join(','));
+  if (params.excludeSectors && params.excludeSectors.length > 0) sp.set('exclude_sectors', params.excludeSectors.join(','));
   return sp;
 }
 

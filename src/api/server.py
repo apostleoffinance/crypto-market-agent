@@ -22,6 +22,7 @@ from src.data.date_utils import (
     quarter_start,
     quarter_end,
 )
+from src.data.analytics import SECTOR_MAP, get_sector
 
 app = FastAPI(
     title="Crypto Market Agent API",
@@ -83,6 +84,13 @@ class SingleCoinResponse(BaseModel):
 
 # ── Endpoints ─────────────────────────────────────────────────────────
 
+@app.get("/api/sectors")
+def list_sectors():
+    """Return the list of available token categories/sectors."""
+    sectors = sorted(set(SECTOR_MAP.values()) | {"Other"})
+    return {"sectors": sectors}
+
+
 @app.get("/api/health")
 def health_check():
     return {"status": "ok", "timestamp": datetime.now(tz=timezone.utc).isoformat()}
@@ -115,6 +123,7 @@ def get_top_coins(
     position: str = Query("end", description="'start', 'end', or 'both'"),
     quarters: Optional[str] = Query(None, description="Comma-separated quarters like '2024-Q1,2024-Q4'"),
     columns: Optional[str] = Query(None, description="Comma-separated columns like 'date,price,market_cap'"),
+    exclude_sectors: Optional[str] = Query(None, description="Comma-separated sectors to exclude, e.g. 'Meme,Exchange'"),
 ):
     """Get top N coins by market cap at quarter boundaries."""
     client = get_client()
@@ -143,10 +152,28 @@ def get_top_coins(
     if not dates:
         raise HTTPException(status_code=400, detail="No valid dates for the given parameters.")
 
-    df = client.get_top_n_at_dates(dates, top_n=top_n)
+    # Fetch more candidates if we need to filter out sectors
+    fetch_n = top_n * 3 if exclude_sectors else top_n
+    df = client.get_top_n_at_dates(dates, top_n=fetch_n)
 
     if df.empty:
         return {"data": [], "total_rows": 0, "dates_queried": len(dates)}
+
+    # Exclude sectors if requested
+    if exclude_sectors:
+        excluded = {s.strip() for s in exclude_sectors.split(",") if s.strip()}
+        if "id" in df.columns:
+            df["_sector"] = df["id"].map(get_sector)
+            df = df[~df["_sector"].isin(excluded)]
+            df = df.drop(columns=["_sector"])
+        # Re-apply top_n per date after filtering
+        if "date" in df.columns:
+            df = (
+                df.sort_values("market_cap", ascending=False)
+                .groupby("date")
+                .head(top_n)
+                .reset_index(drop=True)
+            )
 
     # Filter columns
     col_list = None
@@ -181,6 +208,7 @@ def export_top_coins_csv(
     position: str = Query("end"),
     quarters: Optional[str] = Query(None),
     columns: Optional[str] = Query(None),
+    exclude_sectors: Optional[str] = Query(None),
 ):
     """Export top coins data as a downloadable CSV."""
     result = get_top_coins(
@@ -190,6 +218,7 @@ def export_top_coins_csv(
         position=position,
         quarters=quarters,
         columns=columns,
+        exclude_sectors=exclude_sectors,
     )
     df = pd.DataFrame(result["data"])
     stream = io.StringIO()

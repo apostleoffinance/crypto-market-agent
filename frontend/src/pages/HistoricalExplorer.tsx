@@ -13,6 +13,7 @@ const defaultFilters: FilterState = {
   position: 'end',
   quarters: '',
   columns: ['date', 'symbol', 'name', 'price', 'market_cap', 'volume'],
+  excludeSectors: [],
 };
 
 export default function HistoricalExplorer() {
@@ -32,7 +33,7 @@ export default function HistoricalExplorer() {
         endYear: filters.endYear,
         position: filters.position,
         quarters: filters.quarters || undefined,
-        // Always fetch all columns; display filtering is handled client-side
+        excludeSectors: filters.excludeSectors.length > 0 ? filters.excludeSectors : undefined,
       });
       setData(res.data);
     } catch (err: any) {
@@ -52,6 +53,7 @@ export default function HistoricalExplorer() {
         position: filters.position,
         quarters: filters.quarters || undefined,
         columns: filters.columns.length > 0 ? filters.columns : undefined,
+        excludeSectors: filters.excludeSectors.length > 0 ? filters.excludeSectors : undefined,
       });
     } catch (err: any) {
       setError(err.message || 'Export failed');

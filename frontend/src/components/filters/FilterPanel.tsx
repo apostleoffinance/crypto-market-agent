@@ -1,4 +1,4 @@
-import { type FilterState, ALL_COLUMNS, COLUMN_LABELS } from '../../types';
+import { type FilterState, ALL_COLUMNS, COLUMN_LABELS, SECTORS } from '../../types';
 
 interface FilterPanelProps {
   filters: FilterState;
@@ -15,6 +15,13 @@ export default function FilterPanel({ filters, onChange, onApply, loading }: Fil
       ? filters.columns.filter((c) => c !== col)
       : [...filters.columns, col];
     update({ columns: cols });
+  };
+
+  const toggleSector = (sector: string) => {
+    const sectors = filters.excludeSectors.includes(sector)
+      ? filters.excludeSectors.filter((s) => s !== sector)
+      : [...filters.excludeSectors, sector];
+    update({ excludeSectors: sectors });
   };
 
   return (
@@ -102,6 +109,27 @@ export default function FilterPanel({ filters, onChange, onApply, loading }: Fil
               'Fetch Data'
             )}
           </button>
+        </div>
+      </div>
+
+      {/* Sector Exclusion Filter */}
+      <div className="mt-4 pt-4 border-t border-gray-100">
+        <label className="label">Exclude Categories</label>
+        <p className="text-xs text-gray-400 mb-2">Click to exclude token categories from results</p>
+        <div className="flex flex-wrap gap-2">
+          {SECTORS.map((sector) => (
+            <button
+              key={sector}
+              onClick={() => toggleSector(sector)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                filters.excludeSectors.includes(sector)
+                  ? 'bg-red-100 text-red-700 ring-1 ring-red-300 line-through'
+                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              }`}
+            >
+              {sector}
+            </button>
+          ))}
         </div>
       </div>
 
