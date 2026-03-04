@@ -9,6 +9,15 @@ export function formatUSD(value: number | undefined): string {
 
 export function formatPrice(value: number | undefined): string {
   if (value === undefined || value === null) return '—';
+  // For very small prices (< $0.01), show enough decimals to display meaningful digits
+  if (value > 0 && value < 0.01) {
+    // Find how many decimals needed to show at least 2 significant digits
+    const decimals = Math.max(2, -Math.floor(Math.log10(value)) + 1);
+    return `$${value.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
+  }
+  if (value < 1) {
+    return `$${value.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`;
+  }
   return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
