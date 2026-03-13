@@ -5,15 +5,18 @@ Run with:
     uvicorn src.api.server:app --reload --port 8000
 """
 
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime, timezone
 from typing import Optional
 import pandas as pd
 import os
 import io
+import re
+import time
+from collections import OrderedDict
 
 from src.data.coingecko_client import CoinGeckoClient
 from src.data.date_utils import (
@@ -30,16 +33,17 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# In production, set ALLOWED_ORIGINS to your Vercel URL(s), comma-separated
-_raw_origins = os.getenv("ALLOWED_ORIGINS", "*")
+# In production, set ALLOWED_ORIGINS to your Vercel URL(s), comma-separated.
+# Defaulting to an empty list rejects cross-origin requests unless explicitly configured.
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "")
 _allowed_origins = [o.strip().rstrip("/") for o in _raw_origins.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_allowed_origins,
+    allow_origins=_allowed_origins if _allowed_origins else [],
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # Lazy-init client
@@ -54,6 +58,39 @@ def get_client() -> CoinGeckoClient:
 
 
 ALL_COLUMNS = ["date", "symbol", "name", "price", "market_cap", "volume"]
+
+VALID_POSITIONS = {"start", "end", "both"}
+VALID_INTERVALS = {"quarterly", "monthly", "yearly"}
+_COIN_ID_RE = re.compile(r"^[a-z0-9][a-z0-9\-]{0,99}$")
+
+
+def _validate_position(position: str) -> str:
+    if position not in VALID_POSITIONS:
+        raise HTTPException(status_code=400, detail=f"position must be one of: {', '.join(VALID_POSITIONS)}")
+    return position
+
+
+def _validate_coin_id(coin_id: str) -> str:
+    if not _COIN_ID_RE.match(coin_id):
+        raise HTTPException(status_code=400, detail="Invalid coin_id format")
+    return coin_id
+
+
+# ── Rate limiter for chat ─────────────────────────────────────────────
+
+_chat_rate: dict[str, list[float]] = {}
+_CHAT_RATE_LIMIT = 10          # max requests per window
+_CHAT_RATE_WINDOW = 60.0       # seconds
+
+
+def _check_chat_rate(ip: str) -> None:
+    now = time.monotonic()
+    times = _chat_rate.get(ip, [])
+    times = [t for t in times if now - t < _CHAT_RATE_WINDOW]
+    if len(times) >= _CHAT_RATE_LIMIT:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
+    times.append(now)
+    _chat_rate[ip] = times
 
 
 # ── Schemas ───────────────────────────────────────────────────────────
@@ -103,6 +140,7 @@ def list_quarter_dates(
     position: str = Query("end", description="'start', 'end', or 'both'"),
 ):
     """Return all available quarter boundary dates."""
+    _validate_position(position)
     end_date = None
     if end_year:
         end_date = datetime(end_year, 12, 31, tzinfo=timezone.utc)
@@ -126,6 +164,7 @@ def get_top_coins(
     exclude_sectors: Optional[str] = Query(None, description="Comma-separated sectors to exclude, e.g. 'Meme,Exchange'"),
 ):
     """Get top N coins by market cap at quarter boundaries."""
+    _validate_position(position)
     client = get_client()
 
     # Build dates
@@ -239,8 +278,12 @@ def get_coin_at_date(
     columns: Optional[str] = Query(None),
 ):
     """Get a single coin's data at a specific date."""
+    _validate_coin_id(coin_id)
     client = get_client()
-    dt = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    try:
+        dt = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
     row = client.fetch_coin_at_date(coin_id, dt)
     if row is None:
         raise HTTPException(status_code=404, detail=f"No data found for {coin_id} on {date}")
@@ -263,6 +306,10 @@ def get_coin_history(
     columns: Optional[str] = Query(None, description="Comma-separated columns"),
 ):
     """Get a single coin's historical data across multiple dates."""
+    _validate_coin_id(coin_id)
+    _validate_position(position)
+    if interval not in VALID_INTERVALS:
+        raise HTTPException(status_code=400, detail=f"interval must be one of: {', '.join(VALID_INTERVALS)}")
     from src.agent.tools import _generate_monthly_dates, _generate_yearly_dates
 
     client = get_client()
@@ -398,8 +445,8 @@ def get_sector_performance(
 # ── Chat ──────────────────────────────────────────────────────────────
 
 class ChatRequest(BaseModel):
-    message: str
-    session_id: Optional[str] = None
+    message: str = Field(..., min_length=1, max_length=2000)
+    session_id: Optional[str] = Field(None, max_length=100)
 
 
 class ChatResponse(BaseModel):
@@ -408,30 +455,39 @@ class ChatResponse(BaseModel):
 
 
 # Store agent sessions in memory (keyed by session_id)
-_chat_sessions: dict = {}
+# Capped to prevent memory exhaustion
+_MAX_SESSIONS = 200
+_chat_sessions: OrderedDict = OrderedDict()
 
 
 @app.post("/api/chat", response_model=ChatResponse)
-def chat(req: ChatRequest):
+def chat(req: ChatRequest, request: Request):
     """Send a natural-language question to the AI agent and get an answer."""
     from src.agent.agent import CryptoAgent
     import uuid
+
+    # Rate-limit by client IP
+    client_ip = request.client.host if request.client else "unknown"
+    _check_chat_rate(client_ip)
 
     sid = req.session_id or str(uuid.uuid4())
 
     # Reuse or create agent for this session
     if sid not in _chat_sessions:
+        # Evict oldest session if at capacity
+        while len(_chat_sessions) >= _MAX_SESSIONS:
+            _chat_sessions.popitem(last=False)
         try:
             _chat_sessions[sid] = CryptoAgent()
-        except ValueError as e:
-            raise HTTPException(status_code=500, detail=str(e))
+        except ValueError:
+            raise HTTPException(status_code=500, detail="Chat service unavailable")
 
     agent = _chat_sessions[sid]
 
     try:
         answer = agent.chat(req.message)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="An error occurred processing your request")
 
     return {"response": answer, "session_id": sid}
 
@@ -451,20 +507,27 @@ def reset_chat(session_id: Optional[str] = Query(None)):
 def download_export(filename: str):
     """Serve a CSV file from the exports directory."""
     from pathlib import Path
-    import re
 
-    # Sanitise filename to prevent path traversal
+    # Strict filename validation: alphanumeric, hyphens, underscores, single .csv extension
     if not re.match(r'^[\w\-]+\.csv$', filename):
         raise HTTPException(status_code=400, detail="Invalid filename")
 
     exports_dir = Path(__file__).resolve().parents[2] / "exports"
-    filepath = exports_dir / filename
+    filepath = (exports_dir / filename).resolve()
+
+    # Double-check the resolved path is inside exports_dir (defense in depth)
+    if not str(filepath).startswith(str(exports_dir.resolve())):
+        raise HTTPException(status_code=400, detail="Invalid filename")
 
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="File not found")
 
+    def _read_file():
+        with open(filepath, "r") as f:
+            yield f.read()
+
     return StreamingResponse(
-        open(filepath, "r"),
+        _read_file(),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
