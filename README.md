@@ -1,5 +1,7 @@
 # Crypto Market Agent
 
+**Live:** [crypto-market-agent.vercel.app](https://crypto-market-agent.vercel.app/)
+
 An alternative investment analytics platform for cryptocurrency market data. Explore historical rankings by market cap, run AI-powered queries, and analyze sector dynamics through interactive dashboards.
 
 ## Features
