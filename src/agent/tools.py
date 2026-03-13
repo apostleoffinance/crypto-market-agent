@@ -307,7 +307,10 @@ def get_coin_price_at_date(
 ) -> str:
     """Single-coin lookup."""
     client = _get_client()
-    dt = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    try:
+        dt = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        return json.dumps({"error": f"Invalid date format: '{date}'. Use YYYY-MM-DD."})
     print(f"  📊  Fetching {coin_id} on {date}…")
     row = client.fetch_coin_at_date(coin_id, dt)
     if row is None:
@@ -431,4 +434,7 @@ def call_tool(name: str, arguments: dict) -> str:
     fn = TOOL_MAP.get(name)
     if fn is None:
         return json.dumps({"error": f"Unknown tool: {name}"})
-    return fn(**arguments)
+    try:
+        return fn(**arguments)
+    except Exception as e:
+        return json.dumps({"error": f"Tool '{name}' failed: {type(e).__name__}"})

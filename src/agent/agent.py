@@ -102,17 +102,25 @@ class CryptoAgent:
             {"role": "system", "content": _build_system_prompt()}
         ]
 
+    _MAX_TOOL_ROUNDS = 10  # prevent infinite tool-call loops
+
     def chat(self, user_message: str) -> str:
         """Send *user_message*, handle tool calls, return final text."""
         self.messages.append({"role": "user", "content": user_message})
 
-        while True:
-            resp = self.client.chat.completions.create(
-                model=self.model,
-                messages=self.messages,
-                tools=TOOL_SCHEMAS,
-                tool_choice="auto",
-            )
+        for _ in range(self._MAX_TOOL_ROUNDS):
+            try:
+                resp = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=self.messages,
+                    tools=TOOL_SCHEMAS,
+                    tool_choice="auto",
+                )
+            except Exception as e:
+                error_msg = "Sorry, I'm having trouble reaching the AI service right now. Please try again."
+                self.messages.append({"role": "assistant", "content": error_msg})
+                return error_msg
+
             msg = resp.choices[0].message
 
             # No tool calls → final answer
@@ -125,7 +133,10 @@ class CryptoAgent:
             self.messages.append(msg)
             for tc in msg.tool_calls:
                 fn_name = tc.function.name
-                fn_args = json.loads(tc.function.arguments)
+                try:
+                    fn_args = json.loads(tc.function.arguments)
+                except (json.JSONDecodeError, TypeError):
+                    fn_args = {}
                 print(f"  🔧  {fn_name}({json.dumps(fn_args, indent=2)})")
                 result = call_tool(fn_name, fn_args)
                 self.messages.append({
@@ -133,6 +144,11 @@ class CryptoAgent:
                     "tool_call_id": tc.id,
                     "content": result,
                 })
+
+        # If we exhaust all rounds, return a fallback
+        fallback = "I wasn't able to complete your request — too many steps were needed. Please try a simpler query."
+        self.messages.append({"role": "assistant", "content": fallback})
+        return fallback
 
     def reset(self):
         """Clear conversation history (keeps system prompt)."""

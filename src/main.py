@@ -9,7 +9,12 @@ from src.agent.agent import CryptoAgent
 
 
 def main():
-    agent = CryptoAgent()
+    try:
+        agent = CryptoAgent()
+    except ValueError as e:
+        print(f"\n❌  Failed to start: {e}")
+        print("   Make sure OPENAI_API_KEY is set in your .env file.")
+        return
 
     print("╔══════════════════════════════════════════════════════════╗")
     print("║  🪙  Crypto Market Agent                                ║")

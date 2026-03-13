@@ -20,9 +20,15 @@ def quarter_end(year: int, quarter: int) -> datetime:
 
 
 def parse_quarter_string(q_str: str) -> tuple[int, int]:
-    """'2024-Q1' → (2024, 1)"""
-    year_s, q_s = q_str.split("-Q")
-    return int(year_s), int(q_s)
+    """'2024-Q1' → (2024, 1). Raises ValueError on bad format."""
+    try:
+        year_s, q_s = q_str.split("-Q")
+        year, quarter = int(year_s), int(q_s)
+    except (ValueError, AttributeError):
+        raise ValueError(f"Invalid quarter string: '{q_str}'. Expected format: '2024-Q1'.")
+    if quarter < 1 or quarter > 4:
+        raise ValueError(f"Quarter must be 1–4, got {quarter}.")
+    return year, quarter
 
 
 def generate_quarter_dates(

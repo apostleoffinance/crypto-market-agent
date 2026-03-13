@@ -53,7 +53,10 @@ _client: CoinGeckoClient | None = None
 def get_client() -> CoinGeckoClient:
     global _client
     if _client is None:
-        _client = CoinGeckoClient()
+        try:
+            _client = CoinGeckoClient()
+        except ValueError:
+            raise HTTPException(status_code=503, detail="Data service unavailable. Check API key configuration.")
     return _client
 
 

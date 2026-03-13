@@ -72,15 +72,18 @@ class CoinGeckoClient:
         cache = DB_DIR / "stablecoin_ids.joblib"
         if cache.exists():
             return joblib.load(cache)
-        data = self._get("/coins/markets", {
-            "vs_currency": "usd",
-            "category": "stablecoins",
-            "order": "market_cap_desc",
-            "per_page": 250,
-            "page": 1,
-            "sparkline": "false",
-        })
-        ids = {c["id"] for c in data}
+        try:
+            data = self._get("/coins/markets", {
+                "vs_currency": "usd",
+                "category": "stablecoins",
+                "order": "market_cap_desc",
+                "per_page": 250,
+                "page": 1,
+                "sparkline": "false",
+            })
+            ids = {c["id"] for c in data if isinstance(c, dict) and "id" in c}
+        except Exception:
+            return set()
         joblib.dump(ids, cache)
         return ids
 
